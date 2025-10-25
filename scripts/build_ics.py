@@ -127,12 +127,9 @@ def parse_events(html: str):
 
 
 def build_ics(events, prodid="-//Ofir//MaccabiTLV Fixtures//EN"):
-    """Build an ICS in UTC (Z) to maximize compatibility with Google Calendar.
-    Using UTC avoids the need to embed a VTIMEZONE block for Asia/Jerusalem.
-    """
+    """Build an ICS in UTC (Z) to maximize compatibility with Google Calendar."""
     def ics_escape(s: str) -> str:
-        return s.replace("\", "\\").replace(";", "\;").replace(",", "\,").replace("
-", "\n")
+        return s.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
 
     lines = [
         "BEGIN:VCALENDAR",
@@ -145,7 +142,6 @@ def build_ics(events, prodid="-//Ofir//MaccabiTLV Fixtures//EN"):
     ]
 
     for ev in events:
-        # Convert to UTC for DTSTART/DTEND
         dtstart_utc = ev["start"].astimezone(pytz.UTC)
         dtend_utc = ev["end"].astimezone(pytz.UTC)
         dtstamp_utc = datetime.utcnow()
@@ -157,6 +153,7 @@ def build_ics(events, prodid="-//Ofir//MaccabiTLV Fixtures//EN"):
         uid = f"maccabi-{dtstart_str}-{abs(hash(ev['title']))}@ofir"
         summary = ics_escape(ev["title"])
         location = ics_escape(ev.get("location", ""))
+
         lines += [
             "BEGIN:VEVENT",
             f"UID:{uid}",
@@ -169,9 +166,7 @@ def build_ics(events, prodid="-//Ofir//MaccabiTLV Fixtures//EN"):
         ]
 
     lines.append("END:VCALENDAR")
-    return "
-".join(lines) + "
-"
+    return "\r\n".join(lines) + "\r\n"
 
 
 
