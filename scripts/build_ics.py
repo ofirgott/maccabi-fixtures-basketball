@@ -127,8 +127,12 @@ def parse_events(html: str):
 
 
 def build_ics(events, prodid="-//Ofir//MaccabiTLV Fixtures//EN"):
+    """Build an ICS in UTC (Z) to maximize compatibility with Google Calendar.
+    Using UTC avoids the need to embed a VTIMEZONE block for Asia/Jerusalem.
+    """
     def ics_escape(s: str) -> str:
-        return s.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+        return s.replace("\", "\\").replace(";", "\;").replace(",", "\,").replace("
+", "\n")
 
     lines = [
         "BEGIN:VCALENDAR",
@@ -141,24 +145,34 @@ def build_ics(events, prodid="-//Ofir//MaccabiTLV Fixtures//EN"):
     ]
 
     for ev in events:
-        dtstart = ev["start"].strftime("%Y%m%dT%H%M%S")
-        dtend = ev["end"].strftime("%Y%m%dT%H%M%S")
-        uid = f"maccabi-{dtstart}-{abs(hash(ev['title']))}@ofir"
+        # Convert to UTC for DTSTART/DTEND
+        dtstart_utc = ev["start"].astimezone(pytz.UTC)
+        dtend_utc = ev["end"].astimezone(pytz.UTC)
+        dtstamp_utc = datetime.utcnow()
+
+        dtstart_str = dtstart_utc.strftime("%Y%m%dT%H%M%SZ")
+        dtend_str = dtend_utc.strftime("%Y%m%dT%H%M%SZ")
+        dtstamp_str = dtstamp_utc.strftime("%Y%m%dT%H%M%SZ")
+
+        uid = f"maccabi-{dtstart_str}-{abs(hash(ev['title']))}@ofir"
         summary = ics_escape(ev["title"])
         location = ics_escape(ev.get("location", ""))
         lines += [
             "BEGIN:VEVENT",
             f"UID:{uid}",
-            f"DTSTAMP:{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}",
-            f"DTSTART;TZID=Asia/Jerusalem:{dtstart}",
-            f"DTEND;TZID=Asia/Jerusalem:{dtend}",
+            f"DTSTAMP:{dtstamp_str}",
+            f"DTSTART:{dtstart_str}",
+            f"DTEND:{dtend_str}",
             f"SUMMARY:{summary}",
             *( [f"LOCATION:{location}"] if location else [] ),
             "END:VEVENT",
         ]
 
     lines.append("END:VCALENDAR")
-    return "\r\n".join(lines) + "\r\n"
+    return "
+".join(lines) + "
+"
+
 
 
 def main():
@@ -175,6 +189,11 @@ def main():
         except Exception as e:
             print(f"WARN: failed {ctype}: {e}")
 
+    # If no events parsed, avoid publishing an empty ICS — keep last version and exit non-zero
+    if not all_events:
+        print("ERROR: No events parsed — not updating ICS to avoid empty feed.")
+        sys.exit(2)
+
     all_events = sorted({(e['start'], e['title']): e for e in all_events}.values(), key=lambda x: x['start'])
     os.makedirs("docs", exist_ok=True)
     ics = build_ics(all_events)
@@ -184,4 +203,5 @@ def main():
 
 
 if __name__ == "__main__":
+    sys.exit(main())
     sys.exit(main())
